@@ -25,6 +25,7 @@ const (
 	ServiceAppScript Service = "appscript"
 	ServiceGroups    Service = "groups"
 	ServiceKeep      Service = "keep"
+	ServiceAdmin     Service = "admin"
 )
 
 const (
@@ -83,6 +84,7 @@ var serviceOrder = []Service{
 	ServiceAppScript,
 	ServiceGroups,
 	ServiceKeep,
+	ServiceAdmin,
 }
 
 var serviceInfoByService = map[Service]serviceInfo{
@@ -211,6 +213,16 @@ var serviceInfoByService = map[Service]serviceInfo{
 		user:   false,
 		apis:   []string{"Keep API"},
 		note:   "Workspace only; service account (domain-wide delegation)",
+	},
+	ServiceAdmin: {
+		scopes: []string{
+			"https://www.googleapis.com/auth/admin.directory.user",
+			"https://www.googleapis.com/auth/admin.directory.group",
+			"https://www.googleapis.com/auth/admin.directory.group.member",
+		},
+		user: false,
+		apis: []string{"Admin SDK Directory API"},
+		note: "Workspace only; service account with domain-wide delegation required",
 	},
 }
 

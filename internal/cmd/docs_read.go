@@ -424,3 +424,140 @@ func tabInfoJSON(tab *docs.Tab) map[string]any {
 	}
 	return m
 }
+
+type DocsReadCmd struct {
+	DocID  string `arg:"" name:"docId" help:"Google Doc ID or URL"`
+	Tab    string `name:"tab" help:"Read a specific tab by title or ID"`
+	Offset int    `name:"offset" help:"Character offset to start from (0-indexed)" default:"0"`
+	Limit  int    `name:"limit" help:"Max characters to return (default 100000, 0 = all)" default:"100000"`
+}
+
+func (c *DocsReadCmd) Run(ctx context.Context, flags *RootFlags) error {
+	id := strings.TrimSpace(c.DocID)
+	if id == "" {
+		return usage("empty docId")
+	}
+
+	svc, err := requireDocsService(ctx, flags)
+	if err != nil {
+		return err
+	}
+
+	var text string
+	if c.Tab != "" {
+		doc, docErr := svc.Documents.Get(id).
+			IncludeTabsContent(true).
+			Context(ctx).
+			Do()
+		if docErr != nil {
+			if isDocsNotFound(docErr) {
+				return fmt.Errorf("doc not found or not a Google Doc (id=%s)", id)
+			}
+			return docErr
+		}
+		if doc == nil {
+			return errors.New("doc not found")
+		}
+		tabs := flattenTabs(doc.Tabs)
+		tab := findTab(tabs, c.Tab)
+		if tab == nil {
+			return fmt.Errorf("tab not found: %s", c.Tab)
+		}
+		text = tabPlainText(tab, 0)
+	} else {
+		doc, docErr := svc.Documents.Get(id).
+			Context(ctx).
+			Do()
+		if docErr != nil {
+			if isDocsNotFound(docErr) {
+				return fmt.Errorf("doc not found or not a Google Doc (id=%s)", id)
+			}
+			return docErr
+		}
+		if doc == nil {
+			return errors.New("doc not found")
+		}
+		text = docsPlainText(doc, 0)
+	}
+
+	totalChars := len(text)
+	text = applyCharWindow(text, c.Offset, c.Limit)
+
+	if outfmt.IsJSON(ctx) {
+		result := map[string]any{
+			"text":       text,
+			"totalChars": totalChars,
+		}
+		if c.Offset > 0 {
+			result["offset"] = c.Offset
+		}
+		if c.Limit > 0 {
+			result["limit"] = c.Limit
+		}
+		return outfmt.WriteJSON(ctx, os.Stdout, result)
+	}
+
+	_, err = io.WriteString(os.Stdout, text)
+	return err
+}
+
+// applyCharWindow returns a substring of text based on character offset and limit.
+// offset is 0-indexed. limit=0 means unlimited.
+func applyCharWindow(text string, offset, limit int) string {
+	if offset >= len(text) {
+		return ""
+	}
+	if offset > 0 {
+		text = text[offset:]
+	}
+	if limit > 0 && len(text) > limit {
+		text = text[:limit]
+	}
+	return text
+}
+
+// plural returns "s" if n != 1, for use in occurrence(s) messages.
+func plural(n int) string {
+	if n == 1 {
+		return ""
+	}
+	return "s"
+}
+
+// unescapeString interprets common escape sequences (\n, \t, \\) in s.
+func unescapeString(s string) string {
+	if !strings.ContainsRune(s, '\\') {
+		return s
+	}
+
+	var buf strings.Builder
+	buf.Grow(len(s))
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\\' && i+1 < len(s) {
+			switch s[i+1] {
+			case 'n':
+				buf.WriteByte('\n')
+				i++
+			case 't':
+				buf.WriteByte('\t')
+				i++
+			case '\\':
+				buf.WriteByte('\\')
+				i++
+			default:
+				buf.WriteByte(s[i])
+			}
+		} else {
+			buf.WriteByte(s[i])
+		}
+	}
+	return buf.String()
+}
+
+// countOccurrences counts non-overlapping occurrences of substr in text.
+func countOccurrences(text, substr string, matchCase bool) int {
+	if matchCase {
+		return strings.Count(text, substr)
+	}
+	return strings.Count(strings.ToLower(text), strings.ToLower(substr))
+}

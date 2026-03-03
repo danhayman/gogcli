@@ -29,7 +29,8 @@ type DocsCmd struct {
 	Info        DocsInfoCmd        `cmd:"" name:"info" aliases:"get,show" help:"Get Google Doc metadata"`
 	Create      DocsCreateCmd      `cmd:"" name:"create" aliases:"add,new" help:"Create a Google Doc"`
 	Copy        DocsCopyCmd        `cmd:"" name:"copy" aliases:"cp,duplicate" help:"Copy a Google Doc"`
-	Cat         DocsCatCmd         `cmd:"" name:"cat" aliases:"text,read" help:"Print a Google Doc as plain text"`
+	Cat         DocsCatCmd         `cmd:"" name:"cat" aliases:"text" help:"Print a Google Doc as plain text"`
+	Read        DocsReadCmd        `cmd:"" name:"read" help:"Read document content with character offset/limit for pagination. Use --offset and --limit to page through large documents."`
 	Comments    DocsCommentsCmd    `cmd:"" name:"comments" help:"Manage comments on files"`
 	ListTabs    DocsListTabsCmd    `cmd:"" name:"list-tabs" help:"List all tabs in a Google Doc"`
 	Write       DocsWriteCmd       `cmd:"" name:"write" help:"Write content to a Google Doc"`
@@ -37,7 +38,7 @@ type DocsCmd struct {
 	Delete      DocsDeleteCmd      `cmd:"" name:"delete" help:"Delete text range from document"`
 	FindReplace DocsFindReplaceCmd `cmd:"" name:"find-replace" help:"Find and replace text in document"`
 	Update      DocsUpdateCmd      `cmd:"" name:"update" help:"Insert text at a specific index in a Google Doc"`
-	Edit        DocsEditCmd        `cmd:"" name:"edit" help:"Find and replace text in a Google Doc"`
+	Edit        DocsEditCmd        `cmd:"" name:"edit" help:"Replace, insert, or delete text in a Google Doc. Use --new '' to delete. Use \\n in --new to insert paragraphs. Requires unique match unless --replace-all. Use --dry-run to preview."`
 	Sed         DocsSedCmd         `cmd:"" name:"sed" help:"Regex find/replace (sed-style: s/pattern/replacement/g)"`
 	Clear       DocsClearCmd       `cmd:"" name:"clear" help:"Clear all content from a Google Doc"`
 	Structure   DocsStructureCmd   `cmd:"" name:"structure" aliases:"struct" help:"Show document structure with numbered paragraphs"`
@@ -690,6 +691,150 @@ func (c *DocsListTabsCmd) Run(ctx context.Context, flags *RootFlags) error {
 		}
 	}
 	return nil
+}
+
+// --- Read command (character-based pagination) ---
+
+type DocsReadCmd struct {
+	DocID  string `arg:"" name:"docId" help:"Google Doc ID or URL"`
+	Tab    string `name:"tab" help:"Read a specific tab by title or ID"`
+	Offset int    `name:"offset" help:"Character offset to start from (0-indexed)" default:"0"`
+	Limit  int    `name:"limit" help:"Max characters to return (default 100000, 0 = all)" default:"100000"`
+}
+
+func (c *DocsReadCmd) Run(ctx context.Context, flags *RootFlags) error {
+	account, err := requireAccount(flags)
+	if err != nil {
+		return err
+	}
+
+	id := strings.TrimSpace(c.DocID)
+	if id == "" {
+		return usage("empty docId")
+	}
+
+	svc, err := newDocsService(ctx, account)
+	if err != nil {
+		return err
+	}
+
+	var text string
+	if c.Tab != "" {
+		doc, docErr := svc.Documents.Get(id).
+			IncludeTabsContent(true).
+			Context(ctx).
+			Do()
+		if docErr != nil {
+			if isDocsNotFound(docErr) {
+				return fmt.Errorf("doc not found or not a Google Doc (id=%s)", id)
+			}
+			return docErr
+		}
+		if doc == nil {
+			return errors.New("doc not found")
+		}
+		tabs := flattenTabs(doc.Tabs)
+		tab := findTab(tabs, c.Tab)
+		if tab == nil {
+			return fmt.Errorf("tab not found: %s", c.Tab)
+		}
+		text = tabPlainText(tab, 0)
+	} else {
+		doc, docErr := svc.Documents.Get(id).
+			Context(ctx).
+			Do()
+		if docErr != nil {
+			if isDocsNotFound(docErr) {
+				return fmt.Errorf("doc not found or not a Google Doc (id=%s)", id)
+			}
+			return docErr
+		}
+		if doc == nil {
+			return errors.New("doc not found")
+		}
+		text = docsPlainText(doc, 0)
+	}
+
+	totalChars := len(text)
+	text = applyCharWindow(text, c.Offset, c.Limit)
+
+	if outfmt.IsJSON(ctx) {
+		result := map[string]any{
+			"text":       text,
+			"totalChars": totalChars,
+		}
+		if c.Offset > 0 {
+			result["offset"] = c.Offset
+		}
+		if c.Limit > 0 {
+			result["limit"] = c.Limit
+		}
+		return outfmt.WriteJSON(ctx, os.Stdout, result)
+	}
+
+	_, err = io.WriteString(os.Stdout, text)
+	return err
+}
+
+// applyCharWindow returns a substring of text based on character offset and limit.
+// offset is 0-indexed. limit=0 means unlimited.
+func applyCharWindow(text string, offset, limit int) string {
+	if offset >= len(text) {
+		return ""
+	}
+	if offset > 0 {
+		text = text[offset:]
+	}
+	if limit > 0 && len(text) > limit {
+		text = text[:limit]
+	}
+	return text
+}
+
+// plural returns "s" if n != 1, for use in occurrence(s) messages.
+func plural(n int) string {
+	if n == 1 {
+		return ""
+	}
+	return "s"
+}
+
+// unescapeString interprets common escape sequences (\n, \t, \\) in s.
+func unescapeString(s string) string {
+	if !strings.ContainsRune(s, '\\') {
+		return s
+	}
+
+	var buf strings.Builder
+	buf.Grow(len(s))
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\\' && i+1 < len(s) {
+			switch s[i+1] {
+			case 'n':
+				buf.WriteByte('\n')
+				i++
+			case 't':
+				buf.WriteByte('\t')
+				i++
+			case '\\':
+				buf.WriteByte('\\')
+				i++
+			default:
+				buf.WriteByte(s[i])
+			}
+		} else {
+			buf.WriteByte(s[i])
+		}
+	}
+	return buf.String()
+}
+
+// countOccurrences counts non-overlapping occurrences of substr in text.
+func countOccurrences(text, substr string, matchCase bool) int {
+	if matchCase {
+		return strings.Count(text, substr)
+	}
+	return strings.Count(strings.ToLower(text), strings.ToLower(substr))
 }
 
 // --- Write / Insert / Delete / Find-Replace commands ---

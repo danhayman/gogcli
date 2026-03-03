@@ -439,9 +439,9 @@ func TestDocsEditCmd_EmptyDocId(t *testing.T) {
 	ctx := ui.WithUI(context.Background(), u)
 
 	cmd := &DocsEditCmd{
-		DocID:      "   ",
-		Find:       "foo",
-		ReplaceStr: "bar",
+		DocID: "   ",
+		Old:   "foo",
+		New:   "bar",
 	}
 
 	flags := &RootFlags{Account: "test@example.com"}
@@ -459,9 +459,9 @@ func TestDocsEditCmd_EmptyFind(t *testing.T) {
 	ctx := ui.WithUI(context.Background(), u)
 
 	cmd := &DocsEditCmd{
-		DocID:      "doc123",
-		Find:       "",
-		ReplaceStr: "bar",
+		DocID: "doc123",
+		Old:   "",
+		New:   "bar",
 	}
 
 	flags := &RootFlags{Account: "test@example.com"}

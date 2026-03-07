@@ -64,7 +64,7 @@ func newPersistingTokenSource(base oauth2.TokenSource, store secrets.Store, clie
 func (p *persistingTokenSource) Token() (*oauth2.Token, error) {
 	t, err := p.base.Token()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("base token source: %w", err)
 	}
 
 	refreshToken := strings.TrimSpace(t.RefreshToken)
@@ -147,6 +147,7 @@ func tokenSourceForAccountScopes(ctx context.Context, serviceLabel string, email
 	ctx = context.WithValue(ctx, oauth2.HTTPClient, &http.Client{Timeout: tokenExchangeTimeout})
 
 	baseSource := cfg.TokenSource(ctx, &oauth2.Token{RefreshToken: tok.RefreshToken})
+
 	return newPersistingTokenSource(baseSource, store, client, email, tok), nil
 }
 

@@ -51,6 +51,7 @@ func (s *stubStore) SetToken(client string, email string, tok secrets.Token) err
 	}
 
 	s.tok = tok
+
 	return nil
 }
 func (s *stubStore) DeleteToken(string, string) error         { return nil }

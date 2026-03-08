@@ -1060,10 +1060,20 @@ gog sheets delete-tab <spreadsheetId> <tabName>          # use --force to skip c
 # Forms
 gog forms get <formId>
 gog forms create --title "Weekly Check-in" --description "Friday async update"
+gog forms update <formId> --title "Weekly Sync" --quiz true
+gog forms add-question <formId> --title "What shipped?" --type paragraph --required
+gog forms move-question <formId> 3 1
+gog forms delete-question <formId> 2 --force
 
 # Responses
 gog forms responses list <formId> --max 20
 gog forms responses get <formId> <responseId>
+
+# Watches
+gog forms watch create <formId> --topic projects/<project>/topics/<topic>
+gog forms watch list <formId>
+gog forms watch renew <formId> <watchId>
+gog forms watch delete <formId> <watchId>
 ```
 
 ### Apps Script

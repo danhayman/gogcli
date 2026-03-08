@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -214,15 +215,33 @@ func (c *FormsDeleteQuestionCmd) Run(ctx context.Context, flags *RootFlags) erro
 		return usage("index must be >= 0")
 	}
 
+	svc, err := newFormsService(ctx, account)
+	if err != nil {
+		return err
+	}
+
+	form, err := svc.Forms.Get(formID).Context(ctx).Do()
+	if err != nil {
+		return err
+	}
+	if c.Index >= len(form.Items) {
+		return usagef("question index %d out of range (form has %d items)", c.Index, len(form.Items))
+	}
+
 	if dryRunErr := dryRunExit(ctx, flags, "forms.deleteQuestion", map[string]any{
-		"form_id": formID,
-		"index":   c.Index,
+		"form_id":    formID,
+		"index":      c.Index,
+		"item_count": len(form.Items),
 	}); dryRunErr != nil {
 		return dryRunErr
 	}
 
-	svc, err := newFormsService(ctx, account)
-	if err != nil {
+	confirmFlags := &RootFlags{}
+	if flags != nil {
+		*confirmFlags = *flags
+	}
+	confirmFlags.DryRun = false
+	if err := confirmDestructive(ctx, confirmFlags, fmt.Sprintf("delete question %d from form %s", c.Index, formID)); err != nil {
 		return err
 	}
 

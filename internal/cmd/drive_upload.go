@@ -39,7 +39,7 @@ func (c *DriveUploadCmd) Run(ctx context.Context, flags *RootFlags) error {
 		return err
 	}
 
-	file, err := os.Open(opts.localPath) //nolint:gosec // user-provided path
+	file, err := os.Open(opts.localPath)
 	if err != nil {
 		return err
 	}

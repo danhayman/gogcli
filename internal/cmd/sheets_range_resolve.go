@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"sort"
 	"strings"
 
 	"google.golang.org/api/sheets/v4"
@@ -107,11 +106,6 @@ func resolveGridRangeWithCatalog(input string, catalog *spreadsheetRangeCatalog,
 	return nil, usagef("unknown named range %q", in)
 }
 
-type namedRangeMatch struct {
-	ID   string
-	Name string
-}
-
 // resolveNamedRangeByNameOrID finds a named range by:
 // - exact ID match, or
 // - case-insensitive exact name match (errors if ambiguous).
@@ -123,56 +117,28 @@ func resolveNamedRangeByNameOrID(input string, namedRanges []*sheets.NamedRange)
 		return nil, false, nil
 	}
 
-	// Prefer an exact ID match without any ambiguity.
+	options := make([]selectorMatch, 0, len(namedRanges))
 	for _, nr := range namedRanges {
 		if nr == nil {
 			continue
 		}
-		if strings.TrimSpace(nr.NamedRangeId) == in {
+		options = append(options, selectorMatch{
+			ID:   strings.TrimSpace(nr.NamedRangeId),
+			Name: strings.TrimSpace(nr.Name),
+		})
+	}
+
+	match, found, err := findByIDOrCaseFoldName(in, "named range", options)
+	if err != nil {
+		return nil, false, err
+	}
+	if !found {
+		return nil, false, nil
+	}
+	for _, nr := range namedRanges {
+		if nr != nil && strings.TrimSpace(nr.NamedRangeId) == match.ID {
 			return nr, true, nil
 		}
 	}
-
-	var matches []namedRangeMatch
-	for _, nr := range namedRanges {
-		if nr == nil {
-			continue
-		}
-		name := strings.TrimSpace(nr.Name)
-		if name == "" {
-			continue
-		}
-		if strings.EqualFold(name, in) {
-			matches = append(matches, namedRangeMatch{ID: strings.TrimSpace(nr.NamedRangeId), Name: name})
-		}
-	}
-
-	if len(matches) == 0 {
-		return nil, false, nil
-	}
-	if len(matches) == 1 {
-		for _, nr := range namedRanges {
-			if nr != nil && strings.TrimSpace(nr.NamedRangeId) == matches[0].ID {
-				return nr, true, nil
-			}
-		}
-		// Shouldn't happen, but be safe.
-		return nil, false, fmt.Errorf("named range match disappeared (id=%q)", matches[0].ID)
-	}
-
-	sort.Slice(matches, func(i, j int) bool {
-		if matches[i].Name == matches[j].Name {
-			return matches[i].ID < matches[j].ID
-		}
-		return matches[i].Name < matches[j].Name
-	})
-	parts := make([]string, 0, len(matches))
-	for _, m := range matches {
-		label := m.Name
-		if label == "" {
-			label = "(unnamed)"
-		}
-		parts = append(parts, fmt.Sprintf("%s (%s)", label, m.ID))
-	}
-	return nil, false, usagef("ambiguous named range %q; matches: %s", in, strings.Join(parts, ", "))
+	return nil, false, fmt.Errorf("named range match disappeared (id=%q)", match.ID)
 }

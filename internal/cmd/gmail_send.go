@@ -56,6 +56,7 @@ type sendMessageOptions struct {
 	Body        string
 	BodyHTML    string
 	ReplyInfo   *replyInfo
+	Headers     map[string]string
 	Attachments []mailAttachment
 	Track       bool
 	TrackingCfg *tracking.Config
@@ -318,17 +319,18 @@ func sendGmailBatches(ctx context.Context, svc *gmail.Service, opts sendMessageO
 		}
 
 		raw, err := buildRFC822(mailOptions{
-			From:        opts.FromAddr,
-			To:          batch.To,
-			Cc:          batch.Cc,
-			Bcc:         batch.Bcc,
-			ReplyTo:     opts.ReplyTo,
-			Subject:     opts.Subject,
-			Body:        opts.Body,
-			BodyHTML:    htmlBody,
-			InReplyTo:   reply.InReplyTo,
-			References:  reply.References,
-			Attachments: opts.Attachments,
+			From:              opts.FromAddr,
+			To:                batch.To,
+			Cc:                batch.Cc,
+			Bcc:               batch.Bcc,
+			ReplyTo:           opts.ReplyTo,
+			Subject:           opts.Subject,
+			Body:              opts.Body,
+			BodyHTML:          htmlBody,
+			InReplyTo:         reply.InReplyTo,
+			References:        reply.References,
+			AdditionalHeaders: opts.Headers,
+			Attachments:       opts.Attachments,
 		}, nil)
 		if err != nil {
 			return nil, err

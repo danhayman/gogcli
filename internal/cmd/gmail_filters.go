@@ -96,7 +96,7 @@ func (c *GmailFiltersCreateCmd) Run(ctx context.Context, flags *RootFlags) error
 		return err
 	}
 
-	created, err := svc.Users.Settings.Filters.Create("me", filter).Do()
+	created, err := createGmailFilterWithRetry(ctx, svc, filter)
 	if err != nil {
 		return err
 	}

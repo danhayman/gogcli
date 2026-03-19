@@ -20,9 +20,10 @@ type GmailCmd struct {
 	Unread  GmailUnreadCmd   `cmd:"" name:"unread" aliases:"mark-unread" group:"Organize" help:"Mark messages as unread"`
 	Trash   GmailTrashMsgCmd `cmd:"" name:"trash" group:"Organize" help:"Move messages to trash"`
 
-	Send   GmailSendCmd   `cmd:"" name:"send" group:"Write" help:"Send an email"`
-	Track  GmailTrackCmd  `cmd:"" name:"track" group:"Write" help:"Email open tracking"`
-	Drafts GmailDraftsCmd `cmd:"" name:"drafts" aliases:"draft" group:"Write" help:"Draft operations"`
+	Send      GmailSendCmd      `cmd:"" name:"send" group:"Write" help:"Send an email"`
+	AutoReply GmailAutoReplyCmd `cmd:"" name:"autoreply" group:"Write" help:"Reply once to matching messages"`
+	Track     GmailTrackCmd     `cmd:"" name:"track" group:"Write" help:"Email open tracking"`
+	Drafts    GmailDraftsCmd    `cmd:"" name:"drafts" aliases:"draft" group:"Write" help:"Draft operations"`
 
 	Settings GmailSettingsCmd `cmd:"" name:"settings" group:"Admin" help:"Settings and admin"`
 

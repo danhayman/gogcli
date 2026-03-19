@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- Gmail: add `gmail autoreply` to reply once to matching messages, label the thread for dedupe, and optionally archive/mark read. Includes docs and regression coverage for skip/reply flows.
+
 ## 0.12.0 - 2026-03-09
 
 ### Highlights
@@ -71,6 +76,7 @@
 - Gmail: `drafts update --quote` now picks a non-draft, non-self message from thread fallback (or errors clearly), avoiding self-quote loops and wrong reply headers. (#394) — thanks @salmonumbrella.
 - Gmail: preserve `Cc` metadata output in plain `gmail get --format metadata` even when Gmail returns uppercase `CC` headers. (#343) — thanks @salmonumbrella.
 - Gmail: `gmail archive|read|unread|trash` convenience commands now honor `--dry-run` and emit action-specific dry-run ops. (#385) — thanks @yeager.
+- Gmail: retry transient `failedPrecondition` errors during `gmail filters create` and return the existing matching filter on duplicate creates, so reruns stay idempotent.
 - Sheets: harden `sheets format` against `boarders` typo (JSON and field mask), with clearer error messages. (#284) — thanks @nilzzzzzz.
 - Sheets: force-send empty note values so `sheets update-note --note ''` reliably clears notes via the API. (#341) — thanks @Shehryar.
 - Contacts: send the required `copyMask` when deleting "other contacts", avoiding People API 400 errors. (#384) — thanks @rbansal42.
